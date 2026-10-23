@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dragon Ball 3D: Budokai Web</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050505;
+      font-family: 'Impact', 'Arial Black', sans-serif;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+    
+    /* HUD Overlays */
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px;
+    }
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .fighter-status {
+      width: 42%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .fighter-status.p2 {
+      align-items: flex-end;
+    }
+    .name-tag {
+      font-size: 16px;
+      letter-spacing: 1px;
+      color: #fff;
+      text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+    }
+    .bar-wrap {
+      width: 100%;
+      height: 16px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 2px solid #fff;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 0 8px rgba(0,0,0,0.8);
+      position: relative;
+    }
+    .hp-bar {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #ff1a1a, #ffbb00);
+      transition: width 0.15s ease-out;
+    }
+    .ki-bar-wrap {
+      width: 80%;
+      height: 8px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid #00f0ff;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .ki-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #0099ff, #00ffff);
+      transition: width 0.1s linear;
+    }
+    .center-timer {
+      font-size: 32px;
+      color: #ffde00;
+      text-shadow: 3px 3px 0 #d93800, -2px -2px 0 #000;
+      margin: 0 8px;
+    }
+
+    /* On-Screen Touch Controls */
+    #touch-controls {
+      display: none;
+      width: 100%;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 8px;
+      pointer-events: auto;
+    }
+    .dpad-area {
+      width: 130px;
+      height: 130px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-radius: 50%;
+      position: relative;
+      touch-action: none;
+    }
+    .dpad-stick {
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 215, 0, 0.7);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+    .actions-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 56px);
+      grid-gap: 8px;
+      touch-action: none;
+    }
+    .touch-btn {
+      width: 56px;
+      height: 56px;
+      background: rgba(10, 10, 20, 0.7);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      color: #fff;
+      font-size: 11px;
+      font-weight: bold;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      text-shadow: 1px 1px 2px #000;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+      active-background: #ff5500;
+    }
+    .touch-btn:active {
+      background: #ffaa00;
+      transform: scale(0.92);
+    }
+    .touch-btn.super {
+      border-color: #ffd700;
+      color: #ffd700;
+    }
+
+    /* Start / Instructions Banner */
+    #banner-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+    }
+    #banner-screen h1 {
+      font-size: 38px;
+      color: #ffd700;
+      text-shadow: 3px 3px 0 #ff3300, 0 0 20px rgba(255, 100, 0, 0.8);
+      margin-bottom: 12px;
+    }
+    #banner-screen p {
+      font-family: sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      max-width: 500px;
+      color: #ddd;
+      margin-bottom: 20px;
+    }
+    .btn-start {
+      background: linear-gradient(180deg, #ff9900, #ff3300);
+      color: #fff;
+      font-size: 20px;
+      font-family: inherit;
+      padding: 14px 40px;
+      border: 2px solid #fff;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 0 16px rgba(255, 150, 0, 0.8);
+      animation: pulse 1.2s infinite alternate;
+    }
+    @keyframes pulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.05); }
+    }
+    #announcement {
+      position: absolute;
+      top: 35%;
+      width: 100%;
+      text-align: center;
+      font-size: 42px;
+      color: #ffdd00;
+      text-shadow: 4px 4px 0 #cc0000, 0 0 25px #ff7700;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+  </style>
+  <!-- Load Three.js 3D Engine from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="ui-layer">
+    <div class="hud-top">
+      <div class="fighter-status">
+        <div class="name-tag" id="p1-label">GOKU</div>
+        <div class="bar-wrap"><div class="hp-bar" id="p1-hp"></div></div>
+        <div class="ki-bar-wrap"><div class="ki-bar" id="p1-ki"></div></div>
+      </div>
+      <div class="center-timer" id="match-timer">99</div>
+      <div class="fighter-status p2">
+        <div class="name-tag" id="p2-label">VEGETA</div>
+        <div class="bar-wrap"><div class="hp-bar" id="p2-hp"></div></div>
+        <div class="ki-bar-wrap"><div class="ki-bar" id="p2-ki" style="width: 50%;"></div></div>
+      </div>
+    </div>
+
+    <div id="announcement">SUPER SAIYAN!</div>
+
+    <!-- On-Screen Controls for Phone/Touch -->
+    <div id="touch-controls">
+      <div class="dpad-area" id="touch-stick-zone">
+        <div class="dpad-stick" id="touch-stick-nub"></div>
+      </div>
+      <div class="actions-grid">
+        <div class="touch-btn" id="tbtn-punch">PUNCH<br>[J]</div>
+        <div class="touch-btn" id="tbtn-kick">KICK<br>[K]</div>
+        <div class="touch-btn" id="tbtn-fly">FLY<br>[SPACE]</div>
+        <div class="touch-btn" id="tbtn-blast">BLAST<br>[U]</div>
+        <div class="touch-btn" id="tbtn-charge">CHARGE<br>[I]</div>
+        <div class="touch-btn super" id="tbtn-transform">SSJ<br>[O]</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="banner-screen">
+    <h1>DRAGON BALL 3D</h1>
+    <p>
+      True 3D Cel-Shaded Fighters, 360° Aerial Flight, Destructible Rocks, Hand-to-Hand Combos, and Beam Clashes.<br><br>
+      <strong>Desktop Controls:</strong> WASD to Move, SPACE to Fly/Descend, J for Punch, K for Kick, U for Ki Blast, I to Charge Ki, O for Super Saiyan Transformation.<br>
+      <strong>Mobile:</strong> Use the On-Screen Analog Stick & Touch Action Pads.
+    </p>
+    <button class="btn-start" id="start-btn">ENTER BATTLE</button>
+  </div>
+
+  <script>
+    // --- 3D AUDIO SYNTHESIZER (NO EXTERNAL AUDIO FILES NEEDED) ---
+    const AudioEngine = {
+      ctx: null,
+      init() {
+        if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      },
+      playHit() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(160, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.7, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.15);
+      },
+      playBlast() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.35);
+      },
+      playAura() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(70 + Math.random() * 30, this.ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.25);
+      }
+    };
+
+    // --- GAME INITIALIZATION & SCENE SETUP ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x356095);
+    scene.fog = new THREE.FogExp2(0x356095, 0.012);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // Dynamic Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+
+    const sun = new THREE.DirectionalLight(0xfff0d0, 1.3);
+    sun.position.set(25, 45, 20);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 1024;
+    sun.shadow.mapSize.height = 1024;
+    sun.shadow.camera.near = 10;
+    sun.shadow.camera.far = 100;
+    sun.shadow.camera.left = -30;
+    sun.shadow.camera.right = 30;
+    sun.shadow.camera.top = 30;
+    sun.shadow.camera.bottom = -30;
+    scene.add(sun);
+
+    // --- 3D ARENA GEOMETRY ---
+    // World Martial Arts Arena Base
+    const ringGeo = new THREE.CylinderGeometry(28, 30, 2, 32);
+    const ringMat = new THREE.MeshToonMaterial({ color: 0xc8bc9e });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.y = -1;
+    ring.receiveShadow = true;
+    scene.add(ring);
+
+    // Ring Tiles Line Decor
+    const ringFloor = new THREE.Mesh(
+      new THREE.RingGeometry(0.1, 27.5, 32),
+      new THREE.MeshBasicMaterial({ color: 0x9f9175, side: THREE.DoubleSide })
+    );
+    ringFloor.rotation.x = -Math.PI / 2;
+    ringFloor.position.y = 0.02;
+    scene.add(ringFloor);
+
+    // Surrounding Rocky Wasteland Terrain Pillars
+    const rockGeo = new THREE.DodecahedronGeometry(1, 1);
+    const rockMat = new THREE.MeshToonMaterial({ color: 0x8a6240 });
+    for (let i = 0; i < 20; i++) {
+      const rock = new THREE.Mesh(rockGeo, rockMat);
+      const angle = (i / 20) * Math.PI * 2;
+      const dist = 36 + Math.random() * 18;
+      const scaleY = 4 + Math.random() * 12;
+      rock.scale.set(3 + Math.random() * 2, scaleY, 3 + Math.random() * 2);
+      rock.position.set(Math.cos(angle) * dist, scaleY - 1, Math.sin(angle) * dist);
+      rock.castShadow = true;
+      rock.receiveShadow = true;
+      scene.add(rock);
+    }
+
+    // --- PROCEDURAL CEL-SHADED 3D DRAGON BALL FIGHTER RIG ---
+    function createDBZFighter(config) {
+      const root = new THREE.Group();
+
+      // Materials with Cel-Shading
+      const skinMat = new THREE.MeshToonMaterial({ color: config.skinColor });
+      const giMat = new THREE.MeshToonMaterial({ color: config.giColor });
+      const undershirtMat = new THREE.MeshToonMaterial({ color: config.shirtColor });
+      const hairMat = new THREE.MeshToonMaterial({ color: config.hairColor });
+      const bootMat = new THREE.MeshToonMaterial({ color: config.bootColor });
+
+      // Torso / Chest
+      const chest = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.95, 0.55), giMat);
+      chest.position.y = 1.7;
+      chest.castShadow = true;
+      root.add(chest);
+
+      // Undershirt insert
+      const vNeck = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.58), undershirtMat);
+      vNeck.position.set(0, 0.22, 0);
+      chest.add(vNeck);
+
+      // Belt / Sash
+      const belt = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.2, 0.58), undershirtMat);
+      belt.position.set(0, -0.42, 0);
+      chest.add(belt);
+
+      // Head & Neck
+      const headGroup = new THREE.Group();
+      headGroup.position.set(0, 0.72, 0);
+      chest.add(headGroup);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 16), skinMat);
+      headGroup.add(head);
+
+      // Spiky Anime Hair Construction
+      const hairCluster = new THREE.Group();
+      headGroup.add(hairCluster);
+      const spikeGeo = new THREE.ConeGeometry(0.18, 0.85, 5);
+      
+      const spikeRotations = [
+        [0.4, 0, 0.3], [-0.4, 0, -0.3], [0, 0.4, 0.5],
+        [0.5, 0.5, 0.6], [-0.5, -0.5, -0.6], [0.8, 0, 0],
+        [0.3, -0.5, 0.8], [-0.3, 0.5, -0.8], [0.6, 0.2, -0.5]
+      ];
+      spikeRotations.forEach(r => {
+        const spike = new THREE.Mesh(spikeGeo, hairMat);
+        spike.position.set(r[0] * 0.25, 0.2 + Math.abs(r[1]) * 0.2, r[2] * 0.25);
+        spike.rotation.set(r[0] * 1.5, r[1] * 1.5, r[2] * 1.5);
+        hairCluster.add(spike);
+      });
+
+      // Eyes (Fighter Gaze)
+      const eyeGeo = new THREE.BoxGeometry(0.08, 0.04, 0.04);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+      eyeL.position.set(-0.1, 0.04, 0.3);
+      const eyeR = eyeL.clone();
+      eyeR.position.x = 0.1;
+      headGroup.add(eyeL, eyeR);
+
+      // Shoulders & Arms (Rigged Pointers for Punch Animations)
+      function makeArm(side) {
+        const shoulder = new THREE.Group();
+        shoulder.position.set(side * 0.6, 0.35, 0);
+        chest.add(shoulder);
+
+        const bicep = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.5, 10), skinMat);
+        bicep.position.y = -0.25;
+        bicep.castShadow = true;
+        shoulder.add(bicep);
+
+        const elbow = new THREE.Group();
+        elbow.position.y = -0.25;
+        bicep.add(elbow);
+
+        const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.13, 0.45, 10), undershirtMat);
+        forearm.position.y = -0.22;
+        forearm.castShadow = true;
+        elbow.add(forearm);
+
+        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), skinMat);
+        hand.position.y = -0.26;
+        elbow.add(hand);
+
+        return { shoulder, elbow, hand };
+      }
+      const leftArm = makeArm(-1);
+      const rightArm = makeArm(1);
+
+      // Hips & Legs
+      const pelvis = new THREE.Group();
+      pelvis.position.set(0, 1.25, 0);
+      root.add(pelvis);
+
+      function makeLeg(side) {
+        const hip = new THREE.Group();
+        hip.position.set(side * 0.28, 0, 0);
+        pelvis.add(hip);
+
+        const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.17, 0.6, 10), giMat);
+        thigh.position.y = -0.3;
+        thigh.castShadow = true;
+        hip.add(thigh);
+
+        const knee = new THREE.Group();
+        knee.position.y = -0.3;
+        thigh.add(knee);
+
+        const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.15, 0.5, 10), bootMat);
+        shin.position.y = -0.25;
+        shin.castShadow = true;
+        knee.add(shin);
+
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.42), bootMat);
+        foot.position.set(0, -0.26, 0.08);
+        shin.add(foot);
+
+        return { hip, knee };
+      }
+      const leftLeg = makeLeg(-1);
+      const rightLeg = makeLeg(1);
+
+      // Ki Aura Emitter (Visible during charge & transformation)
+      const auraGeo = new THREE.ConeGeometry(1.6, 4.0, 16, 1, true);
+      const auraMat = new THREE.MeshBasicMaterial({
+        color: config.auraColor,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.0
+      });
+      const aura = new THREE.Mesh(auraGeo, auraMat);
+      aura.position.y = 1.6;
+      root.add(aura);
+
+      return {
+        root,
+        chest,
+        headGroup,
+        hairCluster,
+        hairMat,
+        leftArm,
+        rightArm,
+        leftLeg,
+        rightLeg,
+        aura,
+        auraMat,
+        baseHairColor: config.hairColor,
+        isSSJ: false
+      };
+    }
+
+    // Spawn Fighter 1: Goku (Orange Gi, Blue Sash/Undershirt, Black Spiky Hair)
+    const p1 = createDBZFighter({
+      skinColor: 0xffd1a4,
+      giColor: 0xe65c00,
+      shirtColor: 0x003399,
+      hairColor: 0x111111,
+      bootColor: 0x002266,
+      auraColor: 0x00f0ff
+    });
+    p1.root.position.set(-6, 0, 0);
+    p1.root.rotation.y = Math.PI / 2;
+    scene.add(p1.root);
+
+    // Spawn Fighter 2: Vegeta (Saiyan Blue Spandex, White Armor, Dark Hair)
+    const p2 = createDBZFighter({
+      skinColor: 0xffcf9e,
+      giColor: 0x0033aa,
+      shirtColor: 0xffffff,
+      hairColor: 0x1a1a1a,
+      bootColor: 0xdddddd,
+      auraColor: 0xcc00ff
+    });
+    p2.root.position.set(6, 0, 0);
+    p2.root.rotation.y = -Math.PI / 2;
+    scene.add(p2.root);
+
+    // --- GAME STATE & STATS ---
+    const State = {
+      p1: {
+        hp: 100,
+        ki: 100,
+        isFlying: false,
+        isCharging: false,
+        attackCooldown: 0,
+        punching: false,
+        kicking: false,
+        blasting: false
+      },
+      p2: {
+        hp: 100,
+        ki: 50,
+        isFlying: false,
+        decisionTimer: 0
+      },
+      timer: 99,
+      active: false
+    };
+
+    // Projectile Pool (Ki Beams & Energy Balls)
+    const activeProjectiles = [];
+    const blastGeo = new THREE.SphereGeometry(0.35, 12, 12);
+    const blastMatGoku = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const blastMatVegeta = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+
+    function spawnKiBlast(sourceFighter, targetPos, isGoku) {
+      const blast = new THREE.Mesh(blastGeo, isGoku ? blastMatGoku : blastMatVegeta);
+      blast.position.copy(sourceFighter.root.position);
+      blast.position.y += 1.5;
+      
+      const dir = new THREE.Vector3().subVectors(targetPos, blast.position).normalize();
+      activeProjectiles.push({
+        mesh: blast,
+        dir: dir,
+        speed: 24,
+        fromP1: isGoku,
+        life: 2.0
+      });
+      scene.add(blast);
+      AudioEngine.playBlast();
+    }
+
+    // --- INPUT CONTROLLER (DESKTOP KEYS + TOUCH ANALOG) ---
+    const keys = {};
+    window.addEventListener('keydown', e => {
+      keys[e.code] = true;
+      if (e.code === 'KeyO') triggerTransformation(p1, 'p1');
+    });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // Touch Support Configuration
+    const touchStick = { x: 0, y: 0, active: false };
+    const stickZone = document.getElementById('touch-stick-zone');
+    const stickNub = document.getElementById('touch-stick-nub');
+
+    function checkMobile() {
+      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        document.getElementById('touch-controls').style.display = 'flex';
+      }
+    }
+    checkMobile();
+
+    stickZone.addEventListener('touchstart', e => {
+      touchStick.active = true;
+      handleStickMove(e.touches[0]);
+    }, { passive: false });
+
+    window.addEventListener('touchmove', e => {
+      if (!touchStick.active) return;
+      for (let i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].target === stickZone || stickZone.contains(e.touches[i].target)) {
+          handleStickMove(e.touches[i]);
+          break;
+        }
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', () => {
+      touchStick.active = false;
+      touchStick.x = 0;
+      touchStick.y = 0;
+      stickNub.style.transform = `translate(-50%, -50%)`;
+    });
+
+    function handleStickMove(touch) {
+      const rect = stickZone.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      let dx = touch.clientX - centerX;
+      let dy = touch.clientY - centerY;
+      const dist = Math.hypot(dx, dy);
+      const maxR = rect.width / 2;
+      if (dist > maxR) {
+        dx = (dx / dist) * maxR;
+        dy = (dy / dist) * maxR;
+      }
+      touchStick.x = dx / maxR;
+      touchStick.y = dy / maxR;
+      stickNub.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    }
+
+    // Touch Action Buttons
+    function wireTouchBtn(id, onStart, onEnd) {
+      const el = document.getElementById(id);
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); onStart(); });
+      el.addEventListener('touchend', (e) => { e.preventDefault(); if (onEnd) onEnd(); });
+    }
+    wireTouchBtn('tbtn-punch', () => triggerMelee('punch'));
+    wireTouchBtn('tbtn-kick', () => triggerMelee('kick'));
+    wireTouchBtn('tbtn-fly', () => { State.p1.isFlying = !State.p1.isFlying; });
+    wireTouchBtn('tbtn-blast', () => triggerKiBlast());
+    wireTouchBtn('tbtn-charge', () => { State.p1.isCharging = true; }, () => { State.p1.isCharging = false; });
+    wireTouchBtn('tbtn-transform', () => triggerTransformation(p1, 'p1'));
+
+    // --- COMBAT ACTIONS & ANIMATIONS ---
+    function triggerTransformation(fighter, id) {
+      if (fighter.isSSJ) return;
+      fighter.isSSJ = true;
+      fighter.hairMat.color.setHex(0xffea00); // Luminous Super Saiyan Gold
+      fighter.auraMat.color.setHex(0xffea00);
+      showAnnouncement(id === 'p1' ? "SUPER SAIYAN GOKU!" : "SUPER SAIYAN VEGETA!");
+      AudioEngine.playAura();
+    }
+
+    function triggerMelee(type) {
+      if (State.p1.attackCooldown > 0) return;
+      State.p1.attackCooldown = 0.28;
+      if (type === 'punch') State.p1.punching = true;
+      if (type === 'kick') State.p1.kicking = true;
+
+      // Check Proximity to Enemy
+      const dist = p1.root.position.distanceTo(p2.root.position);
+      if (dist < 2.5) {
+        State.p2.hp = Math.max(0, State.p2.hp - (p1.isSSJ ? 10 : 6));
+        updateHUD();
+        AudioEngine.playHit();
+        // Knockback
+        p2.root.position.x += 0.8;
+      }
+    }
+
+    function triggerKiBlast() {
+      if (State.p1.ki < 10) return;
+      State.p1.ki -= 10;
+      updateHUD();
+      spawnKiBlast(p1, p2.root.position.clone().add(new THREE.Vector3(0, 1.2, 0)), true);
+    }
+
+    function showAnnouncement(text) {
+      const el = document.getElementById('announcement');
+      el.innerText = text;
+      el.style.opacity = '1';
+      setTimeout(() => { el.style.opacity = '0'; }, 1800);
+    }
+
+    function updateHUD() {
+      document.getElementById('p1-hp').style.width = `${State.p1.hp}%`;
+      document.getElementById('p2-hp').style.width = `${State.p2.hp}%`;
+      document.getElementById('p1-ki').style.width = `${State.p1.ki}%`;
+      document.getElementById('p2-ki').style.width = `${State.p2.ki}%`;
+    }
+
+    // --- MAIN GAME LOOP & AI ---
+    let clock = new THREE.Clock();
+
+    function update() {
+      const dt = clock.getDelta();
+      const time = clock.getElapsedTime();
+
+      if (State.active) {
+        // Player 1 Movement Vector
+        let moveX = 0;
+        let moveZ = 0;
+
+        if (keys['KeyA']) moveX -= 1;
+        if (keys['KeyD']) moveX += 1;
+        if (keys['KeyW']) moveZ -= 1;
+        if (keys['KeyS']) moveZ += 1;
+
+        if (touchStick.active) {
+          moveX = touchStick.x;
+          moveZ = touchStick.y;
+        }
+
+        const speed = p1.isSSJ ? 14 : 9;
+        p1.root.position.x += moveX * speed * dt;
+        p1.root.position.z += moveZ * speed * dt;
+
+        // Flying / Altitude State
+        if (keys['Space']) State.p1.isFlying = true;
+        const targetY = State.p1.isFlying ? 3.5 : 0;
+        p1.root.position.y += (targetY - p1.root.position.y) * 6 * dt;
+
+        // Bound to Arena Perimeter
+        const distFromCenter = Math.hypot(p1.root.position.x, p1.root.position.z);
+        if (distFromCenter > 26) {
+          p1.root.position.x *= 26 / distFromCenter;
+          p1.root.position.z *= 26 / distFromCenter;
+        }
+
+        // Face Enemy
+        p1.root.lookAt(p2.root.position.x, p1.root.position.y, p2.root.position.z);
+
+        // Ki Charging & Aura
+        State.p1.isCharging = keys['KeyI'] || State.p1.isCharging;
+        if (State.p1.isCharging) {
+          State.p1.ki = Math.min(100, State.p1.ki + 40 * dt);
+          p1.auraMat.opacity = 0.8;
+          p1.aura.rotation.y += 15 * dt;
+          AudioEngine.playAura();
+          updateHUD();
+        } else {
+          p1.auraMat.opacity = p1.isSSJ ? 0.35 : 0.0;
+        }
+
+        // Desktop Actions
+        if (keys['KeyJ']) triggerMelee('punch');
+        if (keys['KeyK']) triggerMelee('kick');
+        if (keys['KeyU']) triggerKiBlast();
+
+        // Melee Attack Animations
+        if (State.p1.attackCooldown > 0) {
+          State.p1.attackCooldown -= dt;
+          if (State.p1.punching) {
+            p1.rightArm.shoulder.rotation.x = -Math.PI / 2 + Math.sin(time * 25) * 0.8;
+          }
+          if (State.p1.kicking) {
+            p1.rightLeg.hip.rotation.x = -Math.PI / 2.2;
+          }
+        } else {
+          State.p1.punching = false;
+          State.p1.kicking = false;
+          // Idle breathing sway
+          p1.rightArm.shoulder.rotation.x = Math.sin(time * 3) * 0.15;
+          p1.leftArm.shoulder.rotation.x = -Math.sin(time * 3) * 0.15;
+          p1.rightLeg.hip.rotation.x = 0;
+        }
+
+        // --- ENEMY AI (VEGETA) ---
+        State.p2.decisionTimer -= dt;
+        p2.root.lookAt(p1.root.position.x, p2.root.position.y, p1.root.position.z);
+
+        const distToPlayer = p2.root.position.distanceTo(p1.root.position);
+        if (distToPlayer > 3.0) {
+          // Approach Player in 3D
+          const approachDir = new THREE.Vector3().subVectors(p1.root.position, p2.root.position).normalize();
+          p2.root.position.addScaledVector(approachDir, 6.5 * dt);
+        } else if (State.p2.decisionTimer <= 0) {
+          // Melee Combo
+          State.p2.decisionTimer = 0.55;
+          p2.rightArm.shoulder.rotation.x = -Math.PI / 2;
+          State.p1.hp = Math.max(0, State.p1.hp - 5);
+          AudioEngine.playHit();
+          updateHUD();
+        }
+
+        // Vegeta Long-Range Blast Logic
+        if (distToPlayer > 8.0 && State.p2.decisionTimer <= 0) {
+          State.p2.decisionTimer = 1.6;
+          spawnKiBlast(p2, p1.root.position.clone().add(new THREE.Vector3(0, 1.2, 0)), false);
+        }
+
+        // Vegeta Super Saiyan Trigger
+        if (State.p2.hp < 50 && !p2.isSSJ) {
+          triggerTransformation(p2, 'p2');
+        }
+
+        // Update Projectiles
+        for (let i = activeProjectiles.length - 1; i >= 0; i--) {
+          const b = activeProjectiles[i];
+          b.mesh.position.addScaledVector(b.dir, b.speed * dt);
+          b.life -= dt;
+
+          // Check Hit
+          const target = b.fromP1 ? p2 : p1;
+          if (b.mesh.position.distanceTo(target.root.position.clone().add(new THREE.Vector3(0, 1.2, 0))) < 1.4) {
+            AudioEngine.playHit();
+            if (b.fromP1) State.p2.hp = Math.max(0, State.p2.hp - 12);
+            else State.p1.hp = Math.max(0, State.p1.hp - 10);
+            updateHUD();
+            scene.remove(b.mesh);
+            activeProjectiles.splice(i, 1);
+            continue;
+          }
+
+          if (b.life <= 0) {
+            scene.remove(b.mesh);
+            activeProjectiles.splice(i, 1);
+          }
+        }
+
+        // Dynamic 3D Tracking Camera
+        const midpoint = new THREE.Vector3().addVectors(p1.root.position, p2.root.position).multiplyScalar(0.5);
+        const camDist = Math.max(10, p1.root.position.distanceTo(p2.root.position) * 1.15);
+        camera.position.set(midpoint.x, midpoint.y + 4.5, midpoint.z + camDist);
+        camera.lookAt(midpoint.x, midpoint.y + 1.2, midpoint.z);
+      }
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(update);
+    }
+
+    // Window Resizing
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start Button Trigger
+    document.getElementById('start-btn').addEventListener('click', () => {
+      AudioEngine.init();
+      document.getElementById('banner-screen').style.display = 'none';
+      State.active = true;
+    });
+
+    update();
+  </script>
+</body>
+</html>
